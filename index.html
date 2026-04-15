@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hole 21 — Game Design Document</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Lato:wght@400;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green-deep: #1a4d2e;
+      --green-mid: #2d7a45;
+      --green-fairway: #4aaa5c;
+      --green-light: #d4edda;
+      --green-pale: #eaf6ec;
+      --red: #c0392b;
+      --red-light: #e74c3c;
+      --red-pale: #fdecea;
+      --gold: #c9a84c;
+      --gold-light: #f0d080;
+      --white: #ffffff;
+      --off-white: #f8f5f0;
+      --cream: #f2ede4;
+      --ink: #1a2e1a;
+      --flag-red: #d63031;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      background: var(--off-white);
+      color: var(--ink);
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    /* ── ANIMATED GOLF BALLS ── */
+    .golf-ball-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .gball {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: radial-gradient(circle at 35% 35%, #ffffff, #e0e0e0);
+      border-radius: 50%;
+      box-shadow: inset -2px -2px 4px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.2);
+      animation: arc-flight var(--dur) var(--delay) ease-in-out infinite;
+      opacity: 0;
+    }
+
+    /* Dimple pattern via pseudo */
+    .gball::before {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), transparent 60%),
+                  repeating-radial-gradient(circle at 50% 50%, transparent 0px, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 3px);
+    }
+
+    @keyframes arc-flight {
+      0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+      5%   { opacity: 0.85; }
+      50%  { transform: translate(var(--dx), calc(var(--dy) - 120px)) rotate(180deg); opacity: 0.85; }
+      95%  { opacity: 0.85; }
+      100% { transform: translate(calc(var(--dx) * 2), 0) rotate(360deg); opacity: 0; }
+    }
+
+    .gball:nth-child(1)  { --dur:6s;  --delay:0s;    --dx:220px; --dy:60px;  left:5%;   top:30%; width:14px; height:14px; }
+    .gball:nth-child(2)  { --dur:8s;  --delay:1.5s;  --dx:180px; --dy:80px;  left:15%;  top:60%; }
+    .gball:nth-child(3)  { --dur:7s;  --delay:3s;    --dx:260px; --dy:50px;  left:60%;  top:20%; width:12px; height:12px; }
+    .gball:nth-child(4)  { --dur:9s;  --delay:0.5s;  --dx:140px; --dy:90px;  left:75%;  top:70%; }
+    .gball:nth-child(5)  { --dur:5s;  --delay:2s;    --dx:200px; --dy:70px;  left:40%;  top:80%; width:10px; height:10px; }
+    .gball:nth-child(6)  { --dur:10s; --delay:4s;    --dx:160px; --dy:100px; left:85%;  top:40%; width:16px; height:16px; }
+    .gball:nth-child(7)  { --dur:6.5s;--delay:1s;    --dx:240px; --dy:55px;  left:25%;  top:45%; width:11px; height:11px; }
+
+    /* ── HEADER ── */
+    header {
+      position: relative;
+      z-index: 1;
+      background: var(--green-deep);
+      overflow: hidden;
+      padding: 0;
+    }
+
+    /* Rolling green hills */
+    .header-hills {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 90px;
+      z-index: 0;
+    }
+
+    .hill-1 {
+      position: absolute;
+      bottom: 0; left: -5%; width: 55%;
+      height: 80px;
+      background: var(--green-fairway);
+      border-radius: 100% 100% 0 0;
+    }
+
+    .hill-2 {
+      position: absolute;
+      bottom: 0; right: -5%; width: 60%;
+      height: 65px;
+      background: var(--green-mid);
+      border-radius: 100% 100% 0 0;
+    }
+
+    .hill-3 {
+      position: absolute;
+      bottom: 0; left: 30%; width: 45%;
+      height: 50px;
+      background: var(--green-fairway);
+      border-radius: 100% 100% 0 0;
+      opacity: 0.7;
+    }
+
+    /* Flag on header hill */
+    .flag-pin {
+      position: absolute;
+      bottom: 48px;
+      right: 18%;
+      z-index: 2;
+    }
+
+    .flag-pin .pole {
+      width: 3px;
+      height: 52px;
+      background: var(--gold);
+      margin: 0 auto;
+    }
+
+    .flag-pin .flag {
+      width: 22px;
+      height: 14px;
+      background: var(--flag-red);
+      clip-path: polygon(0 0, 100% 30%, 0 100%);
+      margin-left: 3px;
+      margin-bottom: 2px;
+    }
+
+    /* Golf cart SVG decoration */
+    .golf-cart-deco {
+      position: absolute;
+      bottom: 52px;
+      left: 8%;
+      z-index: 2;
+      opacity: 0.9;
+      animation: cart-putt 18s linear infinite;
+    }
+
+    @keyframes cart-putt {
+      0%   { left: -120px; }
+      100% { left: 110%; }
+    }
+
+    .header-inner {
+      position: relative;
+      z-index: 3;
+      padding: 52px 40px 110px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--gold);
+      color: var(--green-deep);
+      font-family: 'Oswald', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      padding: 5px 16px;
+      border-radius: 2px;
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-family: 'Playfair Display', serif;
+      font-weight: 900;
+      font-size: clamp(3.5rem, 10vw, 7.5rem);
+      color: var(--white);
+      line-height: 0.88;
+      letter-spacing: -2px;
+      text-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      margin-bottom: 4px;
+    }
+
+    header h1 em {
+      color: var(--gold-light);
+      font-style: normal;
+    }
+
+    .header-sub {
+      color: rgba(255,255,255,0.65);
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.9rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 14px;
+    }
+
+    .header-meta {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .meta-chip {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
+      padding: 8px 18px;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .meta-chip strong {
+      color: var(--gold-light);
+      display: block;
+      font-size: 0.63rem;
+      font-family: 'Oswald', sans-serif;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    /* ── SCORECARD STRIP ── */
+    .scorecard-strip {
+      background: var(--red);
+      border-bottom: 4px solid var(--green-deep);
+      overflow: hidden;
+      padding: 9px 0;
+    }
+
+    .sc-track {
+      display: flex;
+      gap: 48px;
+      animation: scroll-left 22s linear infinite;
+      width: max-content;
+    }
+
+    .sc-track span {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.9rem;
+      color: var(--white);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .sc-track .dot { color: var(--gold-light); font-size: 0.6rem; }
+
+    @keyframes scroll-left {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--white);
+      border-bottom: 3px solid var(--green-fairway);
+      padding: 0 32px;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 14px rgba(26,77,46,0.12);
+    }
+
+    nav a {
+      color: var(--green-mid);
+      text-decoration: none;
+      padding: 14px 16px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -3px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    nav a:hover {
+      color: var(--green-deep);
+      border-bottom-color: var(--red);
+    }
+
+    /* ── MAIN ── */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 48px 24px 100px;
+    }
+
+    /* ── HOLE MARKER ── */
+    .hole-marker {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .hole-flag {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hole-flag .hpole { width: 2px; height: 28px; background: var(--gold); }
+    .hole-flag .hflag {
+      width: 14px; height: 9px;
+      background: var(--red);
+      clip-path: polygon(0 0, 100% 30%, 0 100%);
+      margin-left: 2px;
+    }
+
+    .hole-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.75rem;
+      color: var(--green-mid);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ── SECTION CARDS ── */
+    .section-card {
+      background: var(--white);
+      border: 2px solid var(--green-light);
+      border-radius: 6px;
+      padding: 36px 40px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 0 var(--green-light), 0 6px 20px rgba(26,77,46,0.07);
+      position: relative;
+    }
+
+    /* Green turf stripe on left */
+    .section-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 5px;
+      background: linear-gradient(to bottom, var(--green-fairway), var(--green-mid));
+      border-radius: 6px 0 0 6px;
+    }
+
+    .section-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--green-light);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-number {
+      background: var(--green-deep);
+      color: var(--gold-light);
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 2px;
+      letter-spacing: 2px;
+    }
+
+    .section-card p {
+      color: #2c4a2c;
+      margin-bottom: 14px;
+      font-size: 0.97rem;
+    }
+
+    .section-card p:last-child { margin-bottom: 0; }
+
+    /* ── INFO GRID ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .info-box {
+      background: var(--green-pale);
+      border: 1.5px solid var(--green-light);
+      border-radius: 4px;
+      padding: 14px 16px;
+    }
+
+    .info-box .label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.63rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--green-mid);
+      margin-bottom: 5px;
+    }
+
+    .info-box .value {
+      font-size: 0.95rem;
+      color: var(--green-deep);
+      font-weight: 700;
+    }
+
+    /* Win/Lose boxes */
+    .win-box { border-color: var(--green-fairway); }
+    .win-box .label { color: var(--green-mid); }
+    .lose-box { background: var(--red-pale); border-color: #f5b7b1; }
+    .lose-box .label { color: var(--red); }
+    .lose-box .value { color: var(--red); }
+
+    /* ── CONTROLS ── */
+    .control-list { list-style: none; margin-top: 10px; }
+
+    .control-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1.5px solid var(--green-light);
+      color: #2c4a2c;
+    }
+
+    .control-list li:last-child { border-bottom: none; }
+
+    .key-badge {
+      background: var(--green-deep);
+      color: var(--gold-light);
+      border-radius: 3px;
+      padding: 3px 12px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.78rem;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── VAR TABLE ── */
+    .var-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .var-table th {
+      text-align: left;
+      background: var(--green-deep);
+      color: var(--gold-light);
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      padding: 10px 14px;
+    }
+
+    .var-table td {
+      padding: 11px 14px;
+      color: #2c4a2c;
+      border-bottom: 1.5px solid var(--green-light);
+    }
+
+    .var-table td:first-child {
+      color: var(--green-deep);
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .var-table tr:nth-child(even) td { background: var(--green-pale); }
+
+    /* ── RULE LIST ── */
+    .rule-list { list-style: none; margin-top: 12px; }
+
+    .rule-list li {
+      background: var(--green-pale);
+      border-left: 4px solid var(--green-fairway);
+      border-radius: 0 4px 4px 0;
+      padding: 11px 16px;
+      margin-bottom: 8px;
+      color: #2c4a2c;
+      font-size: 0.93rem;
+    }
+
+    .rule-list li span.if-word {
+      color: var(--red);
+      font-weight: 800;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .rule-list li span.then-word {
+      color: var(--green-deep);
+      font-weight: 800;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ── LOOP STEPS ── */
+    .loop-steps {
+      list-style: none;
+      counter-reset: step-counter;
+      margin-top: 14px;
+    }
+
+    .loop-steps li {
+      counter-increment: step-counter;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 13px 0;
+      border-bottom: 1.5px solid var(--green-light);
+      color: #2c4a2c;
+    }
+
+    .loop-steps li:last-child { border-bottom: none; }
+
+    .loop-steps li::before {
+      content: counter(step-counter);
+      background: var(--gold);
+      color: var(--green-deep);
+      font-family: 'Playfair Display', serif;
+      font-weight: 900;
+      font-size: 0.9rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── CHANGE BLOCK ── */
+    .change-block {
+      background: var(--cream);
+      border: 1.5px solid #ddd5c0;
+      border-radius: 4px;
+      padding: 18px 22px;
+      margin-bottom: 12px;
+    }
+
+    .change-block .problem-label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+
+    .change-block .fix-label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--green-mid);
+      margin-top: 12px;
+      margin-bottom: 6px;
+    }
+
+    /* ── FLOWCHART ── */
+    .flowchart {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .flow-box {
+      background: var(--green-pale);
+      border: 2px solid var(--green-light);
+      border-radius: 4px;
+      padding: 10px 24px;
+      text-align: center;
+      color: var(--green-deep);
+      font-size: 0.88rem;
+      font-weight: 600;
+      min-width: 220px;
+      max-width: 360px;
+    }
+
+    .flow-box.decision {
+      background: var(--gold-light);
+      border-color: var(--gold);
+      color: var(--ink);
+      font-family: 'Oswald', sans-serif;
+      letter-spacing: 1px;
+      transform: skewX(-1deg);
+    }
+
+    .flow-box.start-end {
+      background: var(--green-deep);
+      border-color: var(--green-deep);
+      color: var(--gold-light);
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      border-radius: 30px;
+    }
+
+    .flow-box.lose-box-flow {
+      background: var(--red);
+      border-color: var(--red);
+      color: white;
+      border-radius: 30px;
+      font-family: 'Playfair Display', serif;
+    }
+
+    .flow-arrow { color: var(--green-mid); font-size: 1.3rem; padding: 2px 0; }
+
+    .flow-branch {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 4px 0;
+    }
+
+    .flow-branch-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .flow-branch-label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.7rem;
+      color: var(--green-mid);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── IMAGE PLACEHOLDER ── */
+    .image-placeholder {
+      border: 2px dashed var(--green-light);
+      border-radius: 6px;
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--green-mid);
+      font-size: 0.88rem;
+      margin-top: 18px;
+      background: var(--green-pale);
+    }
+
+    .image-placeholder p { color: var(--green-mid) !important; }
+
+    /* ── COURSE PROGRESS BAR ── */
+    .course-bar {
+      background: var(--green-light);
+      border-radius: 4px;
+      height: 10px;
+      margin-top: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .course-bar-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--green-mid), var(--green-fairway));
+      border-radius: 4px;
+      animation: course-grow 2s ease-out forwards;
+    }
+
+    @keyframes course-grow {
+      from { width: 0; }
+      to   { width: var(--pct); }
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 36px 20px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-top: 4px solid var(--green-deep);
+      background: var(--green-deep);
+      color: rgba(255,255,255,0.5);
+    }
+
+    footer span { color: var(--gold-light); }
+
+    section strong { color: var(--green-deep); }
+    ul[style] li { color: #2c4a2c; }
+  </style>
+</head>
+<body>
+
+  <!-- Animated golf balls -->
+  <div class="golf-ball-layer">
+    <div class="gball"></div>
+    <div class="gball"></div>
+    <div class="gball"></div>
+    <div class="gball"></div>
+    <div class="gball"></div>
+    <div class="gball"></div>
+    <div class="gball"></div>
+  </div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="badge">Board Game &nbsp;·&nbsp; Mini Golf</div>
+      <h1>HOLE <em>21</em></h1>
+      <p class="header-sub">Game Design Document &nbsp;·&nbsp; Ages 11+</p>
+      <div class="header-meta">
+        <div class="meta-chip"><strong>Platform</strong>Flat Surface</div>
+        <div class="meta-chip"><strong>Type</strong>Board Game</div>
+        <div class="meta-chip"><strong>Audience</strong>Ages 11+</div>
+        <div class="meta-chip"><strong>Style</strong>Mini Golf</div>
+      </div>
+    </div>
+
+    <!-- Golf hills -->
+    <div class="header-hills">
+      <div class="hill-1"></div>
+      <div class="hill-2"></div>
+      <div class="hill-3"></div>
+    </div>
+
+    <!-- Flag pin -->
+    <div class="flag-pin">
+      <div class="flag"></div>
+      <div class="pole"></div>
+    </div>
+
+    <!-- Animated golf cart -->
+    <div class="golf-cart-deco">
+      <svg width="80" height="48" viewBox="0 0 80 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Cart body -->
+        <rect x="10" y="20" width="50" height="18" rx="4" fill="#c9a84c" opacity="0.9"/>
+        <!-- Roof -->
+        <path d="M8 20 Q30 6 62 20Z" fill="white" opacity="0.85"/>
+        <!-- Roof stripes -->
+        <path d="M20 18 Q35 9 50 18" stroke="#c0392b" stroke-width="2" fill="none" opacity="0.7"/>
+        <!-- Windshield -->
+        <rect x="38" y="14" width="16" height="10" rx="2" fill="rgba(200,240,255,0.6)"/>
+        <!-- Wheels -->
+        <circle cx="22" cy="38" r="8" fill="#1a4d2e"/>
+        <circle cx="22" cy="38" r="4" fill="#c9a84c"/>
+        <circle cx="55" cy="38" r="8" fill="#1a4d2e"/>
+        <circle cx="55" cy="38" r="4" fill="#c9a84c"/>
+        <!-- Golf bag -->
+        <rect x="62" y="18" width="10" height="20" rx="3" fill="#8B6240" opacity="0.9"/>
+        <line x1="65" y1="18" x2="65" y2="14" stroke="#c9a84c" stroke-width="1.5"/>
+        <line x1="68" y1="18" x2="68" y2="12" stroke="#c9a84c" stroke-width="1.5"/>
+        <line x1="71" y1="18" x2="71" y2="16" stroke="#c9a84c" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </header>
+
+  <!-- SCROLLING SCORECARD STRIP -->
+  <div class="scorecard-strip">
+    <div class="sc-track">
+      <span>HOLE 21</span><span class="dot">⛳</span>
+      <span>COMPLETE ALL 21 HOLES</span><span class="dot">⛳</span>
+      <span>FEWEST PUTTS WINS</span><span class="dot">⛳</span>
+      <span>BUILD YOUR OWN COURSE</span><span class="dot">⛳</span>
+      <span>HOLE 21</span><span class="dot">⛳</span>
+      <span>COMPLETE ALL 21 HOLES</span><span class="dot">⛳</span>
+      <span>FEWEST PUTTS WINS</span><span class="dot">⛳</span>
+      <span>BUILD YOUR OWN COURSE</span><span class="dot">⛳</span>
+    </div>
+  </div>
+
+  <nav>
+    <a href="#overview">Overview</a>
+    <a href="#goal">Goal</a>
+    <a href="#controls">Controls</a>
+    <a href="#mechanics">Mechanics</a>
+    <a href="#loop">Game Loop</a>
+    <a href="#playtesting">Playtesting</a>
+    <a href="#flowchart">Flowchart</a>
+    <a href="#reflection">Reflection</a>
+  </nav>
+
+  <main>
+
+    <!-- SECTION 1 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 01 — Overview</span></div>
+    <section class="section-card" id="overview">
+      <h2><span class="section-number">01</span> Game Overview</h2>
+      <p>
+        <strong>Hole 21</strong> is a hands-on tabletop game that takes mini golf from simple to extreme. Players build their own course — from laying tracks flat on the floor to constructing ramps that go up, down, and everywhere in between. The track layouts are unlimited; your imagination is the only boundary.
+      </p>
+      <p>
+        Our balls are made from the highest quality materials, as are our putters. Start with a simple open course, then add obstacles round by round to crank up the difficulty. If a player completes the course within the time limit, they earn a bonus — speed and precision are both rewarded.
+      </p>
+      <div class="info-grid">
+        <div class="info-box"><div class="label">Game Type</div><div class="value">Board Game</div></div>
+        <div class="info-box"><div class="label">Platform</div><div class="value">Flat Surface</div></div>
+        <div class="info-box"><div class="label">Target Audience</div><div class="value">Ages 11 and up</div></div>
+        <div class="info-box"><div class="label">Tools</div><div class="value">Tabletop / Physical</div></div>
+      </div>
+
+      <!-- Course completion meter -->
+      <p style="margin-top:22px; margin-bottom:6px;"><strong>Course Completion Meter</strong></p>
+      <div class="course-bar"><div class="course-bar-fill" style="--pct: 0%;"></div></div>
+      <p style="font-size:0.78rem; color:var(--green-mid); margin-top:6px;">Track your progress across all 21 holes</p>
+
+      <div class="image-placeholder">
+        <p>⛳ Add course art or a photo of your board here!</p>
+        <p style="margin-top:8px; font-size:0.8rem;">
+          <code style="color:var(--green-mid);">&lt;img src="your-image.png" alt="course photo" class="game-image"&gt;</code>
+        </p>
+      </div>
+    </section>
+
+    <!-- SECTION 2 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 02 — Goal</span></div>
+    <section class="section-card" id="goal">
+      <h2><span class="section-number">02</span> Game Goal</h2>
+      <p>The goal of the game is to complete all 21 holes using the fewest putts possible. The player with the lowest total putt count at the end wins.</p>
+      <div class="info-grid">
+        <div class="info-box win-box"><div class="label">✓ Win Condition</div><div class="value">Complete all 21 holes in fewer putts than your opponent.</div></div>
+        <div class="info-box lose-box"><div class="label">✗ Lose Condition</div><div class="value">Finish with more putts than the opposing player.</div></div>
+      </div>
+    </section>
+
+    <!-- SECTION 3 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 03 — Controls</span></div>
+    <section class="section-card" id="controls">
+      <h2><span class="section-number">03</span> Player Controls</h2>
+      <ul class="control-list">
+        <li><span class="key-badge">→ Right Arrow</span>Move player right across the course</li>
+        <li><span class="key-badge">↑ Up Arrow</span>Move player forward down the fairway</li>
+        <li><span class="key-badge">← Left Arrow</span>Swing the club left to aim the ball</li>
+        <li><span class="key-badge">→ Right Arrow</span>Swing the club right to aim the ball</li>
+        <li><span class="key-badge">Mouse</span>Select course tiles and place obstacles</li>
+      </ul>
+      <p style="margin-top:18px;"><strong>Example:</strong> Press Left Arrow → player swings left and the ball curves left toward the hole.</p>
+    </section>
+
+    <!-- SECTION 4 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 04 — Mechanics</span></div>
+    <section class="section-card" id="mechanics">
+      <h2><span class="section-number">04</span> Game Mechanics &amp; Logic</h2>
+      <p><strong>Main Actions:</strong></p>
+      <ul style="margin: 8px 0 22px 20px; line-height: 2.2;">
+        <li>Swing the putter and choose your course layout</li>
+        <li>Make the ball into the hole</li>
+        <li>Avoid obstacles placed on the track</li>
+      </ul>
+
+      <p style="margin-bottom:10px;"><strong>Variables:</strong></p>
+      <table class="var-table">
+        <thead>
+          <tr><th>Variable Name</th><th>Starting Value</th><th>What It Does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>score</td><td>Tee Box (0)</td><td>Tracks total putts taken across all 21 holes</td></tr>
+          <tr><td>health</td><td>3</td><td>How many obstacle hits a player can take per hole</td></tr>
+          <tr><td>timeRemaining</td><td>60 seconds</td><td>Time limit per hole — finish early for a bonus</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:26px; margin-bottom:10px;"><strong>If / Then Rules:</strong></p>
+      <ul class="rule-list">
+        <li><span class="if-word">If</span> the player makes a hole-in-one → <span class="then-word">add 10 bonus points</span></li>
+        <li><span class="if-word">If</span> the player hits an obstacle → <span class="then-word">lose 1 health</span></li>
+        <li><span class="if-word">If</span> health equals 0 → <span class="then-word">the game ends (lose)</span></li>
+        <li><span class="if-word">If</span> time equals 0 → <span class="then-word">the game ends (lose)</span></li>
+        <li><span class="if-word">If</span> the ball goes in the hole → <span class="then-word">round complete — advance to next hole</span></li>
+        <li><span class="if-word">If</span> player finishes under time limit → <span class="then-word">earn a speed bonus</span></li>
+      </ul>
+    </section>
+
+    <!-- SECTION 5 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 05 — Game Loop</span></div>
+    <section class="section-card" id="loop">
+      <h2><span class="section-number">05</span> Game Loop</h2>
+      <p>These steps repeat for every hole until all 21 are complete:</p>
+      <ol class="loop-steps">
+        <li>Check for player input (key press or mouse click)</li>
+        <li>Move the player and aim the putter</li>
+        <li>Swing — check for ball collisions with obstacles or walls</li>
+        <li>Update score (putt count) and health based on what was hit</li>
+        <li>Check if ball is in the hole (win this round) or if health / time hit zero (lose)</li>
+        <li>Player 1 finishes, then Player 2 goes — alternate until hole is complete</li>
+        <li>Advance to next hole and repeat until Hole 21 is done</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 6 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 06 — Playtesting</span></div>
+    <section class="section-card" id="playtesting">
+      <h2><span class="section-number">06</span> Playtesting &amp; Changes</h2>
+      <p>Changes made after testing the game with real players:</p>
+      <div class="change-block">
+        <div class="problem-label">⚠ Problem Found</div>
+        <p>Players said the early holes were too easy — no challenge getting the ball in.</p>
+        <div class="fix-label">✓ Changes Made</div>
+        <p>Added more obstacles on holes 5–21 and reduced the per-hole time limit from 80 to 60 seconds. Players also now choose obstacle placement before each round starts, adding strategy.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 7 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 07 — Flowchart</span></div>
+    <section class="section-card" id="flowchart">
+      <h2><span class="section-number">07</span> Logic Flowchart</h2>
+      <p>This diagram shows how the game logic flows from start to finish:</p>
+      <div class="flowchart">
+        <div class="flow-box start-end">Start Game</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Set holes &amp; course track</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Arrange the 21 holes</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Player 1 goes first, then Player 2</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box decision">Did player hit an obstacle?</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-branch">
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">Yes</div>
+            <div class="flow-box">Lose 1 health</div>
+          </div>
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">No</div>
+            <div class="flow-box">Nothing happens</div>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box decision">Did the ball go in the hole?</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-branch">
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">Yes</div>
+            <div class="flow-box">Add points — next hole</div>
+          </div>
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">No</div>
+            <div class="flow-box">Keep putting</div>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box decision">Is health = 0 OR time = 0?</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-branch">
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">Yes</div>
+            <div class="flow-box lose-box-flow">Game Over</div>
+          </div>
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">No</div>
+            <div class="flow-box">Keep playing ↑</div>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box decision">Did player complete all 21 holes?</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-branch">
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">Yes</div>
+            <div class="flow-box start-end">You Win! ⛳</div>
+          </div>
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">No</div>
+            <div class="flow-box">Loop back up ↑</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 8 -->
+    <div class="hole-marker"><div class="hole-flag"><div class="hflag"></div><div class="hpole"></div></div><span class="hole-num">Hole 08 — Reflection</span></div>
+    <section class="section-card" id="reflection">
+      <h2><span class="section-number">08</span> Designer Reflection</h2>
+      <p>
+        The hardest part was making the game balanced — especially deciding how many obstacles to put on each hole so it felt challenging but still fair. Playtesting was huge: we changed the timer and added more obstacles after real players tried it.
+      </p>
+      <p>
+        The game uses key programming concepts like variables (putt count, health, time), if/then rules (if ball hits obstacle → lose health), and loops (repeat for each of the 21 holes). Building this taught us how physical game design and coding logic connect in real ways.
+      </p>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Created by <span>Student Name</span> &nbsp;·&nbsp; Game Design &amp; Programming &nbsp;·&nbsp; <span>2025</span></p>
+  </footer>
+
+  <script>
+    // Animate course progress bar when scrolled into view
+    const bar = document.querySelector('.course-bar-fill');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.style.setProperty('--pct', '62%');
+          e.target.style.width = '62%';
+        }
+      });
+    }, { threshold: 0.5 });
+    if (bar) observer.observe(bar);
+  </script>
+
+</body>
+</html>
